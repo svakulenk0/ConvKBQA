@@ -8,9 +8,6 @@ Created on Apr 4, 2020
 
 Transformer for sequence classification with a message-passing layer 
 '''
-import numpy as np
-import scipy.sparse as sp
-
 import torch
 import torch.nn as nn
 from torch.nn import CrossEntropyLoss, MSELoss
@@ -18,39 +15,12 @@ from torch.nn import CrossEntropyLoss, MSELoss
 from transformers.modeling_bert import BertPreTrainedModel, BertModel
 
 
-def generate_adj_sp(adjacencies, n_entities, include_inverse):
-    '''
-    Build adjacency matrix
-    '''
-    adj_shape = (n_entities, n_entities)
-    # colect all predicate matrices separately into a list
-    sp_adjacencies = []
-    for edges in adjacencies:
-        # split subject (row) and object (col) node URIs
-        n_edges = len(edges)
-        row, col = np.transpose(edges)
-        
-        # duplicate edges in the opposite direction
-        if include_inverse:
-            _row = np.hstack([row, col])
-            col = np.hstack([col, row])
-            row = _row
-            n_edges *= 2
-        
-        # create adjacency matrix for this predicate
-        data = np.ones(n_edges)
-        adj = sp.csr_matrix((data, (row, col)), shape=adj_shape)
-        sp_adjacencies.append(adj)
-    
-    return np.asarray(sp_adjacencies)
-
-
 class MPLayer(nn.Module):
     def __init__(self, num_entities):
         super(MPLayer, self).__init__()
         self.num_entities = num_entities
 
-    def forward(self, p, adjacencies):
+    def forward(self, p, A):
         '''
         Inputs:
             *p*: predicate scores from Transformer
@@ -58,12 +28,19 @@ class MPLayer(nn.Module):
         Outputs:
             *y*: answer activations
         '''
-        A = generate_adj_sp(adjacencies, self.num_entities, include_inverse=True)
-        # slice A by the selected predicates
-        _A = sum(p * A)
+#         print(A.shape)
+#         print(p)
         
+        # propagate score from the Transformer
+        _A = A * p
+        
+        # create a vector to propagate across all available edges, i.e., from all entities, with a score 1
+        x = torch.ones(self.num_entities, 1, requires_grad=True)
+
+#         print(x.shape)
         # MP step: propagates entity activations to the adjacent nodes
-        y = x @ _A
+        y = torch.sparse.mm(_A, x)
+#         print(y.shape)
         
         return y
 
@@ -96,9 +73,13 @@ class MessagePassingBert(BertPreTrainedModel):
         loss, logits = outputs[:2]
     """  # noqa: ignore flake8"
 
-    def __init__(self, config, num_entities, weight=None):
+    def __init__(self, config, num_entities, weight=None, mp_layer=True):
         super(MessagePassingBert, self).__init__(config)
-        self.num_labels = config.num_labels
+        self.mp_layer = mp_layer
+        if self.mp_layer:
+            self.num_labels = num_entities
+        else:
+            self.num_labels = config.num_labels
 
         self.bert = BertModel(config)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
@@ -135,8 +116,16 @@ class MessagePassingBert(BertPreTrainedModel):
 
         pooled_output = self.dropout(pooled_output)
         predicate_logits = self.classifier(pooled_output)
-        # MP layer takes predicate scores and propagates them to the adjacent entities
-        logits = self.mp(predicate_logits, adjacencies)
+        if self.mp_layer == True:
+            # MP layer takes predicate scores and propagates them to the adjacent entities
+            logits = self.mp(predicate_logits.item(), adjacencies)
+        else:
+            logits = predicate_logits
+        
+        
+#         print(logits.shape)
+#         print(logits.view(-1, self.num_labels).shape)
+#         print(labels.view(-1).shape)
         
         outputs = (logits,) + outputs[2:]  # add hidden states and attention if they are here
 
