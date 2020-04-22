@@ -8,7 +8,11 @@ Created on Apr 16, 2020
 
 1-hop MPBert without node selection and graph expansion
 
-srun -c40 --mem=100G --time=50:00:00 python mpbert_seed_conversational.py --n 5 --first
+srun --pty -c20 --mem=100G --time=50:00:00 python train_mpbert_seed.py --n 500 --conversational
+
+Continue training from a previous checkpoint
+srun --pty -c20 --mem=100G --time=50:00:00 python train_mpbert_seed.py --n 500 --conversational --v 1
+
 '''
 import os
 import json
@@ -34,8 +38,6 @@ print("Started..")
 # training setup
 train_conversations_path = './data/train_set/train_set_ALL.json'
 dev_conversations_path = './data/dev_set/dev_set_ALL.json'
-
-model_name = 'bert-base-uncased'
 
 hdt_file = 'wikidata2018_09_11.hdt'
 namespace = 'predef-wikidata2018-09-all'
@@ -203,8 +205,15 @@ def run_inference(model, dataset, device):
     return p1s
 
 
-def main(first_questions_only=False, nsamples=None, epochs=1, gpu=False):
+def main(first_questions_only=False, nsamples=None, version=0, epochs=1, gpu=False):
     # model init
+    if version > 0:
+        # initialise from a local pre-trained model
+        model_name = model_path % version
+    else:
+        # start fine-tuning the standard pre-trained model
+        model_name = 'bert-base-uncased'
+
     tokenizer = BertTokenizer.from_pretrained(model_name)
     config = BertConfig.from_pretrained(model_name, num_labels=1)
     model = MessagePassingBert(config)
@@ -333,15 +342,15 @@ def main(first_questions_only=False, nsamples=None, epochs=1, gpu=False):
         print("  Validation Loss: {0:.2f}".format(avg_val_loss))
 
         
-        output_dir = model_path % (epoch_i + 1)
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
+    output_dir = model_path % (version + epochs)
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
 
-        print("Saving model to %s" % output_dir)
+    print("Saving model to %s" % output_dir)
 
-        model_to_save = model.module if hasattr(model, 'module') else model  # Take care of distributed/parallel training
-        model_to_save.save_pretrained(output_dir)
-        tokenizer.save_pretrained(output_dir)
+    model_to_save = model.module if hasattr(model, 'module') else model  # Take care of distributed/parallel training
+    model_to_save.save_pretrained(output_dir)
+    tokenizer.save_pretrained(output_dir)
             
     p1s = run_inference(model, train_dataset, device)
     print("Train set P@1: %.2f" % np.mean(p1s))
@@ -352,8 +361,9 @@ def main(first_questions_only=False, nsamples=None, epochs=1, gpu=False):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--n', nargs='?', const=1, type=int) 
-    parser.add_argument('--first', dest='first_questions_only', action='store_true')
-    parser.add_argument('--conversational', dest='first_questions_only', action='store_false')
+    parser.add_argument('--n', nargs='?', const=1, type=int)  # limit the number of data samples to n top
+    parser.add_argument('--v', nargs='?', const=0, type=int)  # continue training with a pre-trained model saved at a previous interation v
+    parser.add_argument('--independent', dest='first_questions_only', action='store_true')  # evaluate only on the first (explicit) questions
+    parser.add_argument('--conversational', dest='first_questions_only', action='store_false')  # evaluate on all questions (including follow-up possibly implicit questions)
     args = parser.parse_args()
-    main(args.first_questions_only, args.n)
+    main(args.first_questions_only, args.n, args.v)
