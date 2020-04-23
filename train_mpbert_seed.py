@@ -349,7 +349,7 @@ def main(first_questions_only=False, nsamples=None, epochs=3, version=0, gpu=Fal
 
         print("Saving model to %s" % output_dir)
 
-        model_to_save.save_pretrained(output_dir)
+        model.save_pretrained(output_dir)
         tokenizer.save_pretrained(output_dir)
                 
         p1s = run_inference(model, train_dataset, device)
