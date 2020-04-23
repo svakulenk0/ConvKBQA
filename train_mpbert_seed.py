@@ -8,7 +8,7 @@ Created on Apr 16, 2020
 
 1-hop MPBert without node selection and graph expansion
 
-srun --pty -c20 --mem=100G --time=50:00:00 python train_mpbert_seed.py --n 500 --conversational
+srun --pty -c20 --mem=100G --time=50:00:00 python train_mpbert_seed.py --n 500 --conversational --v 0 --e 3
 
 Continue training from a previous checkpoint
 srun --pty -c20 --mem=100G --time=50:00:00 python train_mpbert_seed.py --n 500 --conversational --v 1
@@ -205,7 +205,7 @@ def run_inference(model, dataset, device):
     return p1s
 
 
-def main(first_questions_only=False, nsamples=None, version=0, epochs=1, gpu=False):
+def main(first_questions_only=False, nsamples=None, epochs=3, version=0, gpu=False):
     # model init
     if version > 0:
         # initialise from a local pre-trained model
@@ -342,28 +342,28 @@ def main(first_questions_only=False, nsamples=None, version=0, epochs=1, gpu=Fal
         print("  Validation Loss: {0:.2f}".format(avg_val_loss))
 
         
-    output_dir = model_path % (version + epochs)
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
+        output_dir = model_path % (version + epochs)
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
 
-    print("Saving model to %s" % output_dir)
+        print("Saving model to %s" % output_dir)
 
-    model_to_save = model.module if hasattr(model, 'module') else model  # Take care of distributed/parallel training
-    model_to_save.save_pretrained(output_dir)
-    tokenizer.save_pretrained(output_dir)
-            
-    p1s = run_inference(model, train_dataset, device)
-    print("Train set P@1: %.2f" % np.mean(p1s))
+        model_to_save.save_pretrained(output_dir)
+        tokenizer.save_pretrained(output_dir)
+                
+        p1s = run_inference(model, train_dataset, device)
+        print("Train set P@1: %.2f" % np.mean(p1s))
 
-    p1s = run_inference(model, valid_dataset, device)
-    print("Dev set P@1: %.2f" % np.mean(p1s))
+        p1s = run_inference(model, valid_dataset, device)
+        print("Dev set P@1: %.2f" % np.mean(p1s))
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--n', nargs='?', const=1, type=int)  # limit the number of data samples to n top
+    parser.add_argument('--e', nargs='?', const=3, type=int)  # continue training with a pre-trained model saved at a previous interation v
     parser.add_argument('--v', nargs='?', const=0, type=int)  # continue training with a pre-trained model saved at a previous interation v
     parser.add_argument('--independent', dest='first_questions_only', action='store_true')  # evaluate only on the first (explicit) questions
     parser.add_argument('--conversational', dest='first_questions_only', action='store_false')  # evaluate on all questions (including follow-up possibly implicit questions)
     args = parser.parse_args()
-    main(args.first_questions_only, args.n, args.v)
+    main(args.first_questions_only, args.n, args.e, args.v)
