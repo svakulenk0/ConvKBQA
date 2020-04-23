@@ -8,6 +8,7 @@ Created on Apr 16, 2020
 
 1-hop MPBert without node selection and graph expansion
 
+Start training saving model and evaluating every epoch
 srun --pty -c20 --mem=100G --time=50:00:00 python train_mpbert_seed.py --n 500 --conversational --v 0 --e 3
 
 Continue training from a previous checkpoint
@@ -361,7 +362,7 @@ def main(first_questions_only=False, nsamples=None, epochs=3, version=0, gpu=Fal
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--n', nargs='?', const=1, type=int)  # limit the number of data samples to n top
-    parser.add_argument('--e', nargs='?', const=3, type=int)  # continue training with a pre-trained model saved at a previous interation v
+    parser.add_argument('--e', nargs='?', const=3, type=int)
     parser.add_argument('--v', nargs='?', const=0, type=int)  # continue training with a pre-trained model saved at a previous interation v
     parser.add_argument('--independent', dest='first_questions_only', action='store_true')  # evaluate only on the first (explicit) questions
     parser.add_argument('--conversational', dest='first_questions_only', action='store_false')  # evaluate on all questions (including follow-up possibly implicit questions)
