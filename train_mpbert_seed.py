@@ -9,7 +9,7 @@ Created on Apr 16, 2020
 1-hop MPBert without node selection and graph expansion
 
 Start training saving model and evaluating every epoch
-srun --pty -c20 --mem=100G --time=50:00:00 python train_mpbert_seed.py --n 500 --conversational --v 0 --e 3
+srun --pty -c20 --mem=100G --time=50:00:00 python train_mpbert_seed.py --n 50 --conversational --v 0 --e 4
 
 Continue training from a previous checkpoint
 srun --pty -c20 --mem=100G --time=50:00:00 python train_mpbert_seed.py --n 500 --conversational --v 1
@@ -209,6 +209,7 @@ def run_inference(model, dataset, device):
 def main(first_questions_only=False, nsamples=None, epochs=3, version=0, gpu=False):
     # model init
     if version > 0:
+        print("Loading a checkpoint")
         # initialise from a local pre-trained model
         model_name = model_path % version
     else:
@@ -343,7 +344,7 @@ def main(first_questions_only=False, nsamples=None, epochs=3, version=0, gpu=Fal
         print("  Validation Loss: {0:.2f}".format(avg_val_loss))
 
         
-        output_dir = model_path % (version + epochs)
+        output_dir = model_path % (version + epoch_i)
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
 
